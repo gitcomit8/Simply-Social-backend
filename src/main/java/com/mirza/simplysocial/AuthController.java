@@ -6,11 +6,9 @@ import com.mirza.simplysocial.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 
@@ -40,30 +38,43 @@ public class AuthController {
     }
 
     @PostMapping("/auth/login")
-    public ResponseEntity<ApiResponse> loginUser(@RequestBody LoginRequest loginRequest){
-        Optional<User> userOptional=userRepository.findById(loginRequest.getUsername());
+    public ResponseEntity<?> loginUser(@RequestBody LoginRequest loginRequest) {
+        Optional<User> userOptional = userRepository.findById(loginRequest.getUsername());
 
-        if(userOptional.isPresent()){
-            User user=userOptional.get();
-            if(user.getPassword().equals(loginRequest.getPassword())){
-                return new ResponseEntity<>(new ApiResponse(true, "Login successful!"), HttpStatus.OK);
-            }else{
-                return new ResponseEntity<>(new ApiResponse(false, "Invalid password!"), HttpStatus.UNAUTHORIZED);
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            if (user.getPassword().equals(loginRequest.getPassword())) { // Remember: Hashing needed!
+                String sessionToken = java.util.UUID.randomUUID().toString();
+                LocalDateTime expiry = LocalDateTime.now().plusMinutes(30);
+                user.setSessionToken(sessionToken);
+                user.setSessionTokenExpiry(expiry);
+                userRepository.save(user);
+                return ResponseEntity.ok(new LoginResponse(true, "Login successful", sessionToken));
+            } else {
+                return new ResponseEntity<>(new ApiResponse(false, "Invalid password"), HttpStatus.UNAUTHORIZED);
             }
-        }else {
-            return new ResponseEntity<>(new ApiResponse(false, "User not found!"), HttpStatus.NOT_FOUND);
+        } else {
+            return new ResponseEntity<>(new ApiResponse(false, "Username not found"), HttpStatus.UNAUTHORIZED);
         }
     }
 
+
     @PostMapping("/posts/create")
-    public ResponseEntity<ApiResponse> createPost(@RequestBody PostRequest postRequest){
-        Optional<User> userOptional=userRepository.findById(postRequest.getUsername());
-        if(!userOptional.isPresent()){
-            return new ResponseEntity<>(new ApiResponse(false, "User not found!"), HttpStatus.NOT_FOUND);
+    public ResponseEntity<ApiResponse> createPost(@RequestBody PostRequest postRequest,
+                                                  @RequestHeader("Authorization") String sessionToken) {
+        if (sessionToken == null || sessionToken.trim().isEmpty()) {
+            return new ResponseEntity<>(new ApiResponse(false, "Session token is required"), HttpStatus.UNAUTHORIZED);
         }
-        User poster=userOptional.get();
-        Post newPost=new Post(postRequest.getMediaFile(),poster);
+
+        Optional<User> userOptional = userRepository.findBySessionToken(sessionToken);
+
+        if (!userOptional.isPresent() || userOptional.get().getSessionTokenExpiry().isBefore(LocalDateTime.now())) {
+            return new ResponseEntity<>(new ApiResponse(false, "Invalid or expired session"), HttpStatus.UNAUTHORIZED);
+        }
+
+        User poster = userOptional.get();
+        Post newPost = new Post(postRequest.getMediaFile(), poster);
         postRepository.save(newPost);
-        return new ResponseEntity<>(new ApiResponse(true, "Post created successfully!"), HttpStatus.CREATED);
+        return new ResponseEntity<>(new ApiResponse(true, "Post created successfully"), HttpStatus.CREATED);
     }
 }

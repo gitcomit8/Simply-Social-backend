@@ -4,12 +4,20 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.springframework.cglib.core.Local;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
 public class User {
     @Column(nullable = false)
     private String realName;
+
+    @Column(unique = true)
+    private String sessionToken;
+
+    private LocalDateTime sessionTokenExpiry;
 
     @Id
     @Column(nullable = false, unique = true)
@@ -43,4 +51,8 @@ public class User {
     public void setPassword(String password) {
         this.password = password;
     }
+    public String getSessionToken() {return sessionToken;}
+    public void setSessionToken(String sessionToken) {this.sessionToken = sessionToken;}
+    public LocalDateTime getSessionTokenExpiry() {return sessionTokenExpiry;}
+    public void setSessionTokenExpiry(LocalDateTime sessionTokenExpiry) {this.sessionTokenExpiry = sessionTokenExpiry;}
 }
